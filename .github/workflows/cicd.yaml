@@ -7,14 +7,12 @@ on:
 jobs:
   pipeline:
     runs-on: self-hosted
-    # SET LOWERCASE OWNER ONCE FOR THE WHOLE JOB
     env:
-      REPO_OWNER: "" # Will be set in the first step
+      REPO_OWNER: "" 
 
     steps:
     - uses: actions/checkout@v4
 
-    # NEW: This step sets the lowercase variable for all future steps
     - name: Set Lowercase Owner
       run: echo "REPO_OWNER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
@@ -27,17 +25,15 @@ jobs:
 
     - name: Build Docker Image
       run: |
-        VERSION=${{ steps.version.outputs.version }}
         docker build --no-cache \
-          -t ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:$VERSION \
+          -t ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:${{ steps.version.outputs.version }} \
           -t ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:latest \
           -f app/Dockerfile app/
         
     - name: Scan Image with Trivy
       uses: aquasecurity/trivy-action@0.20.0
       with:
-        # NOW THIS USES THE CORRECT LOWERCASE NAME
-        image-ref: ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:latest
+        image-ref: ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:latest
         severity: CRITICAL,HIGH
         ignore-unfixed: true
         exit-code: "0"
@@ -47,8 +43,9 @@ jobs:
 
     - name: Push Images
       run: |
-        docker push ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:${{ steps.version.outputs.version }}
-        docker push ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:latest
+        # CHANGED: Use workshop name, not app name
+        docker push ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:${{ steps.version.outputs.version }}
+        docker push ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:latest
 
     - name: Create GHCR Secret
       run: |
@@ -64,8 +61,10 @@ jobs:
 
     - name: Patch Deployment With Version
       run: |
-        VERSION=${{ steps.version.outputs.version }}
-        kubectl set image deployment/devsecops-workshop web=ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:$VERSION}}
+        # FIXED: Removed extra }} and ensured name is workshop
+        kubectl set image deployment/devsecops-workshop web=ghcr.io/${{ env.REPO_OWNER }}/devsecops-workshop:${{ steps.version.outputs.version }}
 
     - name: Wait for Rollout
-      run: kubectl rollout status deployment/devsecops-app
+      run: |
+        # FIXED: Changed app to workshop
+        kubectl rollout status deployment/devsecops-workshop
