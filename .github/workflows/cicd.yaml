@@ -7,9 +7,16 @@ on:
 jobs:
   pipeline:
     runs-on: self-hosted
+    # SET LOWERCASE OWNER ONCE FOR THE WHOLE JOB
+    env:
+      REPO_OWNER: "" # Will be set in the first step
 
     steps:
     - uses: actions/checkout@v4
+
+    # NEW: This step sets the lowercase variable for all future steps
+    - name: Set Lowercase Owner
+      run: echo "REPO_OWNER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
     - name: Generate Semantic Version
       id: version
@@ -17,37 +24,30 @@ jobs:
       with:
         tag_prefix: "v"
         format: "${major}.${minor}.${patch}"
-        major_pattern: "BREAKING CHANGE"
-        minor_pattern: "feat"
-
-    - name: Print version
-      run: echo "VERSION=${{ steps.version.outputs.version }}"
 
     - name: Build Docker Image
       run: |
-        VERSION=${{ steps.version.outputs.version }}
         docker build --no-cache \
-          -t ghcr.io/${{ github.repository_owner }}/devsecops-app:$VERSION \
-          -t ghcr.io/${{ github.repository_owner }}/devsecops-app:latest \
+          -t ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:${{ steps.version.outputs.version }} \
+          -t ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:latest \
           -f app/Dockerfile app/
 
     - name: Scan Image with Trivy
       uses: aquasecurity/trivy-action@0.20.0
       with:
-        image-ref: ghcr.io/${{ github.repository_owner }}/devsecops-app:latest
+        # NOW THIS USES THE CORRECT LOWERCASE NAME
+        image-ref: ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:latest
         severity: CRITICAL,HIGH
         ignore-unfixed: true
         exit-code: "0"
 
-    - name: Log in to GitHub Container Registry
-      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
+    - name: Log in to GHCR
+      run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
     - name: Push Images
       run: |
-        VERSION=${{ steps.version.outputs.version }}
-        docker push ghcr.io/${{ github.repository_owner }}/devsecops-app:$VERSION
-        docker push ghcr.io/${{ github.repository_owner }}/devsecops-app:latest
+        docker push ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:${{ steps.version.outputs.version }}
+        docker push ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:latest
 
     - name: Create GHCR Secret
       run: |
@@ -63,8 +63,7 @@ jobs:
 
     - name: Patch Deployment With Version
       run: |
-        VERSION=${{ steps.version.outputs.version }}
-        kubectl set image deployment/devsecops-app web=ghcr.io/${{ github.repository_owner }}/devsecops-app:$VERSION
+        kubectl set image deployment/devsecops-app web=ghcr.io/${{ env.REPO_OWNER }}/devsecops-app:${{ steps.version.outputs.version }}
 
     - name: Wait for Rollout
       run: kubectl rollout status deployment/devsecops-app
