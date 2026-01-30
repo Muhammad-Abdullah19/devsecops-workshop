@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: devsecops-app
+  name: devsecops-workshop
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: devsecops-app
+      app: devsecops-workshop
   template:
     metadata:
       labels:
-        app: devsecops-app
+        app: devsecops-workshop
     spec:
       containers:
       - name: web
-        image: ghcr.io/<user>/devsecops-app:latest
+        image: ghcr.io/<user>/devsecops-workshop:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
